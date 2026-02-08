@@ -1,84 +1,110 @@
 import { create } from 'zustand';
-import { ChatStore, Message, Chat } from '../types';
+import { ChatStore, Message, Chat } from '../types'; // Types dosyanın doğru yerde olduğundan emin ol
 
 const useChatStore = create<ChatStore>((set, get) => ({
-  messages: [
-    {
-      role: 'assistant',
-      content: 'Merhaba! Kodunuz veya projeniz hakkında bir şey sormak ister misiniz?'
-    }
-  ],
+  // Başlangıç Durumu
+  messages: [],
   chatHistory: [],
   currentChatId: null,
 
+  // 1. Yeni Mesaj Ekleme (Kullanıcı gönderdiğinde veya AI cevap bitince)
   addMessage: (message: Message) => {
-    set((state) => ({
-      messages: [...state.messages, message]
-    }));
+    set((state) => {
+      const newMessages = [...state.messages, message];
 
-    // Auto-save to current chat
-    const { currentChatId, chatHistory, messages } = get();
-    if (currentChatId !== null) {
-      const updatedHistory = chatHistory.map((chat) =>
-        chat.id === currentChatId
-          ? { ...chat, messages: [...messages, message] }
-          : chat
-      );
-      set({ chatHistory: updatedHistory });
-    }
-  },
+      // Eğer aktif bir sohbet varsa, geçmişi de güncelle (Sidebar için)
+      let updatedHistory = state.chatHistory;
+      if (state.currentChatId !== null) {
+        updatedHistory = state.chatHistory.map((chat) =>
+          chat.id === state.currentChatId
+            ? { ...chat, messages: newMessages }
+            : chat
+        );
+      }
 
-  createNewChat: () => {
-    const { chatHistory, currentChatId, messages } = get();
-
-    // Save current chat before creating new one
-    if (currentChatId !== null) {
-      const updatedHistory = chatHistory.map((chat) =>
-        chat.id === currentChatId ? { ...chat, messages } : chat
-      );
-      set({ chatHistory: updatedHistory });
-    }
-
-    // Create new chat
-    const newChatId = chatHistory.length;
-    const newChat: Chat = {
-      id: newChatId,
-      title: `Chat ${newChatId + 1}`,
-      messages: [
-        {
-          role: 'assistant',
-          content: 'Merhaba! Kodunuz veya projeniz hakkında bir şey sormak ister misiniz?'
-        }
-      ]
-    };
-
-    set({
-      chatHistory: [...chatHistory, newChat],
-      currentChatId: newChatId,
-      messages: newChat.messages
+      return {
+        messages: newMessages,
+        chatHistory: updatedHistory,
+      };
     });
   },
 
+  // 2. [ÖNEMLİ] Akış Halindeki Mesajı Güncelleme (WebSocket için)
+  updateLastMessage: (content: string) => {
+    set((state) => {
+      const newMessages = [...state.messages];
+      const lastIndex = newMessages.length - 1;
+
+      // Eğer hiç mesaj yoksa işlem yapma
+      if (lastIndex < 0) return {};
+
+      // Son mesajın içeriğine yeni gelen harfi/parçayı ekle
+      const lastMessage = newMessages[lastIndex];
+      newMessages[lastIndex] = {
+        ...lastMessage,
+        content: lastMessage.content + content,
+      };
+
+      // Bu değişikliği anında geçmişe de yansıt (Sohbet değiştirsen bile kaybolmaz)
+      let updatedHistory = state.chatHistory;
+      if (state.currentChatId !== null) {
+        updatedHistory = state.chatHistory.map((chat) =>
+          chat.id === state.currentChatId
+            ? { ...chat, messages: newMessages }
+            : chat
+        );
+      }
+
+      return {
+        messages: newMessages,
+        chatHistory: updatedHistory,
+      };
+    });
+  },
+
+  // 3. Yeni Sohbet Oluşturma
+  createNewChat: () => {
+    const { chatHistory } = get();
+    
+    // Benzersiz bir ID oluştur (Timestamp en güvenlisidir)
+    const newChatId = Date.now(); 
+    
+    // Yeni sohbetin başlangıç mesajı
+    const initialMessage: Message = {
+      role: 'assistant',
+      content: 'Merhaba! Yeni bir oturum başlattınız. Kodunuzla ilgili ne sormak istersiniz?'
+    };
+
+    const newChat: Chat = {
+      id: newChatId,
+      title: `Chat ${chatHistory.length + 1}`, // Örn: Chat 1, Chat 2
+      messages: [initialMessage]
+    };
+
+    set({
+      chatHistory: [...chatHistory, newChat], // Listeye ekle
+      currentChatId: newChatId,              // Aktif yap
+      messages: newChat.messages             // Ekrana bas
+    });
+  },
+
+  // 4. Sohbetler Arası Geçiş
   switchChat: (chatId: number) => {
     const { chatHistory } = get();
-    const chat = chatHistory.find((c) => c.id === chatId);
+    const targetChat = chatHistory.find((c) => c.id === chatId);
 
-    if (chat) {
+    if (targetChat) {
       set({
         currentChatId: chatId,
-        messages: chat.messages
+        messages: targetChat.messages // O sohbetin mesajlarını yükle
       });
     }
   },
 
+  // 5. Oturumu Temizle (Opsiyonel: Ayarlar sayfası için)
   clearSession: () => {
     set({
-      messages: [
-        {
-          role: 'assistant',
-          content: 'Merhaba! Kodunuz veya projeniz hakkında bir şey sormak ister misiniz?'
-        }
-      ],
+      messages: [],
       chatHistory: [],
       currentChatId: null
     });

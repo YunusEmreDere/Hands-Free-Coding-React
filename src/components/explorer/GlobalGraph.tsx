@@ -67,6 +67,15 @@ export default function GlobalGraph({ allFiles, onSelectFile }: GlobalGraphProps
       panY = Math.max(-limit, Math.min(limit, panY));
     };
 
+    // Read theme colors from CSS variables
+    const cs = getComputedStyle(document.documentElement);
+    const colorPurple = cs.getPropertyValue('--color-accent-purple').trim() || '#7c3aed';
+    const colorCyan = cs.getPropertyValue('--color-accent-cyan').trim() || '#06b6d4';
+    const colorSurface = cs.getPropertyValue('--color-surface').trim() || '#15151e';
+    const colorSurfaceAlt = cs.getPropertyValue('--color-surface-alt').trim() || '#1e1e3a';
+    const colorTextMuted = cs.getPropertyValue('--color-text-muted').trim() || '#9ca3af';
+    const colorBorderAlt = cs.getPropertyValue('--color-border-alt').trim() || '#2d2d3d';
+
     let animationId: number;
 
     const resize = () => {
@@ -102,21 +111,21 @@ export default function GlobalGraph({ allFiles, onSelectFile }: GlobalGraphProps
 
         ctx.beginPath(); ctx.moveTo(ax, ay);
         ctx.quadraticCurveTo(mx, my, bx, by);
-        ctx.strokeStyle = 'rgba(124, 58, 237, 0.15)'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.strokeStyle = colorPurple + '26'; ctx.lineWidth = 1.5; ctx.stroke();
 
         // Particle
         const p = (t * 0.2 + ax * 0.005) % 1;
         const px = (1 - p) ** 2 * ax + 2 * (1 - p) * p * mx + p ** 2 * bx;
         const py = (1 - p) ** 2 * ay + 2 * (1 - p) * p * my + p ** 2 * by;
         ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(124, 58, 237, 0.6)'; ctx.fill();
+        ctx.fillStyle = colorPurple + '99'; ctx.fill();
       });
 
       // Draw folder group labels
       folderKeys.forEach((folder, fi) => {
         const row = (fi + 0.5) / totalFolders;
         const y = 0.08 + row * 0.84;
-        ctx.font = '10px monospace'; ctx.fillStyle = '#2d2d3d'; ctx.textAlign = 'left';
+        ctx.font = '10px monospace'; ctx.fillStyle = colorBorderAlt; ctx.textAlign = 'left';
         ctx.fillText(folder, 12, y * h() - 18);
       });
 
@@ -132,17 +141,17 @@ export default function GlobalGraph({ allFiles, onSelectFile }: GlobalGraphProps
         // Glow for files with connections
         if (hasImports || isImported) {
           const glow = ctx.createRadialGradient(nx, ny, r, nx, ny, r * 2.5);
-          glow.addColorStop(0, 'rgba(124, 58, 237, 0.12)'); glow.addColorStop(1, 'rgba(124, 58, 237, 0)');
+          glow.addColorStop(0, colorPurple + '1f'); glow.addColorStop(1, colorPurple + '00');
           ctx.beginPath(); ctx.arc(nx, ny, r * 2.5, 0, Math.PI * 2); ctx.fillStyle = glow; ctx.fill();
         }
 
         ctx.beginPath(); ctx.arc(nx, ny, r, 0, Math.PI * 2);
-        ctx.fillStyle = hasImports && isImported ? '#7c3aed' : hasImports ? '#1e1e3a' : isImported ? '#1e1e3a' : '#15151e';
+        ctx.fillStyle = hasImports && isImported ? colorPurple : hasImports ? colorSurfaceAlt : isImported ? colorSurfaceAlt : colorSurface;
         ctx.fill();
-        ctx.strokeStyle = hasImports ? '#06b6d4' : isImported ? '#7c3aed' : '#2d2d3d';
+        ctx.strokeStyle = hasImports ? colorCyan : isImported ? colorPurple : colorBorderAlt;
         ctx.lineWidth = 1.5; ctx.stroke();
 
-        ctx.font = '10px monospace'; ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'center';
+        ctx.font = '10px monospace'; ctx.fillStyle = colorTextMuted; ctx.textAlign = 'center';
         ctx.fillText(file.name.length > 18 ? file.name.substring(0, 15) + '...' : file.name, nx, ny + r + 14);
       });
 

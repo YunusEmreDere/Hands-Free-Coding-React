@@ -37,12 +37,12 @@ export default function Visualizer() {
           }`}
           style={{
             background: listening
-              ? 'radial-gradient(circle, #0a0a12 0%, #0a0a12 60%, transparent 60%), conic-gradient(from 0deg, #06b6d4, #7c3aed, #06b6d4)'
-              : 'radial-gradient(circle, #0a0a12 0%, #0a0a12 60%, transparent 60%), conic-gradient(from 0deg, #374151, #4b5563, #374151)',
+              ? 'radial-gradient(circle, var(--color-bg) 0%, var(--color-bg) 60%, transparent 60%), conic-gradient(from 0deg, var(--color-accent-cyan), var(--color-accent-purple), var(--color-accent-cyan))'
+              : 'radial-gradient(circle, var(--color-bg) 0%, var(--color-bg) 60%, transparent 60%), conic-gradient(from 0deg, #374151, #4b5563, #374151)',
           }}
         >
-          <div className={`w-[220px] h-[220px] rounded-full bg-[#0f0f1a] border-2 flex items-center justify-center transition-colors duration-500 ${
-            listening ? 'border-[#1a1a2e]' : 'border-gray-700'
+          <div className={`w-[220px] h-[220px] rounded-full bg-theme-panel border-2 flex items-center justify-center transition-colors duration-500 ${
+            listening ? 'border-theme-border' : 'border-gray-700'
           }`}>
             {/* Sound Bars */}
             <div className="flex items-center gap-1.5 h-20">
@@ -71,7 +71,7 @@ export default function Visualizer() {
       {/* Status */}
       <div className="mt-8 text-center">
         <div className={`text-3xl font-light tracking-[0.5em] mb-2 transition-colors duration-500 ${
-          listening ? 'text-white' : 'text-gray-500'
+          listening ? 'text-theme-text' : 'text-theme-text-muted'
         }`}>
           {listening ? 'LISTENING' : 'NOT LISTENING'}
         </div>

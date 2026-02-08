@@ -65,6 +65,15 @@ export default function SingleFileGraph({ file, allFiles }: SingleFileGraphProps
     let animationId: number;
     const graph = buildGraph();
 
+    // Read theme colors from CSS variables
+    const cs = getComputedStyle(document.documentElement);
+    const colorPurple = cs.getPropertyValue('--color-accent-purple').trim() || '#7c3aed';
+    const colorCyan = cs.getPropertyValue('--color-accent-cyan').trim() || '#06b6d4';
+    const colorSurface = cs.getPropertyValue('--color-surface').trim() || '#15151e';
+    const colorText = cs.getPropertyValue('--color-text').trim() || '#fff';
+    const colorTextMuted = cs.getPropertyValue('--color-text-muted').trim() || '#9ca3af';
+    const colorTextFaint = cs.getPropertyValue('--color-text-faint').trim() || '#4b5563';
+
     // Pan & Zoom state
     let panX = 0, panY = 0, zoom = 1;
     let isDragging = false, dragStartX = 0, dragStartY = 0, panStartX = 0, panStartY = 0;
@@ -95,7 +104,7 @@ export default function SingleFileGraph({ file, allFiles }: SingleFileGraphProps
       ctx.clearRect(0, 0, w(), h());
 
       if (graph.nodes.length === 0) {
-        ctx.font = '16px system-ui'; ctx.fillStyle = '#4b5563'; ctx.textAlign = 'center';
+        ctx.font = '16px system-ui'; ctx.fillStyle = colorTextFaint; ctx.textAlign = 'center';
         ctx.fillText('Bir dosya seçin', w() / 2, h() / 2);
         animationId = requestAnimationFrame(draw); return;
       }
@@ -112,12 +121,12 @@ export default function SingleFileGraph({ file, allFiles }: SingleFileGraphProps
         const mx = (ax + bx) / 2, my = (ay + by) / 2;
         ctx.beginPath(); ctx.moveTo(ax, ay);
         ctx.quadraticCurveTo(mx + Math.sin(t + ax) * 15, my, bx, by);
-        ctx.strokeStyle = 'rgba(124, 58, 237, 0.3)'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.strokeStyle = colorPurple + '4d'; ctx.lineWidth = 2; ctx.stroke();
         const p = (t * 0.3 + ax * 0.01) % 1;
         const px = (1 - p) ** 2 * ax + 2 * (1 - p) * p * (mx + Math.sin(t + ax) * 15) + p ** 2 * bx;
         const py = (1 - p) ** 2 * ay + 2 * (1 - p) * p * my + p ** 2 * by;
-        ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fillStyle = '#7c3aed'; ctx.fill();
-        ctx.font = '10px monospace'; ctx.fillStyle = 'rgba(124, 58, 237, 0.6)'; ctx.textAlign = 'center';
+        ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fillStyle = colorPurple; ctx.fill();
+        ctx.font = '10px monospace'; ctx.fillStyle = colorPurple + '99'; ctx.textAlign = 'center';
         const lx = (ax + bx) / 2, ly = (ay + by) / 2;
         if (label) ctx.fillText(`{ ${label} }`, lx, ly - 8);
       });
@@ -127,20 +136,20 @@ export default function SingleFileGraph({ file, allFiles }: SingleFileGraphProps
         const r = node.role === 'center' ? 32 : 24;
         if (node.role === 'center') {
           const glow = ctx.createRadialGradient(nx, ny, r, nx, ny, r * 3);
-          glow.addColorStop(0, 'rgba(124, 58, 237, 0.25)'); glow.addColorStop(1, 'rgba(124, 58, 237, 0)');
+          glow.addColorStop(0, colorPurple + '40'); glow.addColorStop(1, colorPurple + '00');
           ctx.beginPath(); ctx.arc(nx, ny, r * 3, 0, Math.PI * 2); ctx.fillStyle = glow; ctx.fill();
         }
         ctx.beginPath(); ctx.arc(nx, ny, r, 0, Math.PI * 2);
-        ctx.fillStyle = node.role === 'center' ? '#7c3aed' : '#15151e'; ctx.fill();
-        ctx.strokeStyle = node.role === 'center' ? '#a78bfa' : node.role === 'import' ? '#06b6d4' : '#7c3aed';
+        ctx.fillStyle = node.role === 'center' ? colorPurple : colorSurface; ctx.fill();
+        ctx.strokeStyle = node.role === 'center' ? '#a78bfa' : node.role === 'import' ? colorCyan : colorPurple;
         ctx.lineWidth = 2; ctx.stroke();
         ctx.font = `${node.role === 'center' ? 18 : 14}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#fff'; ctx.fillText('📄', nx, ny); ctx.textBaseline = 'alphabetic';
-        ctx.font = '12px monospace'; ctx.fillStyle = node.role === 'center' ? '#fff' : '#9ca3af';
+        ctx.fillStyle = colorText; ctx.fillText('📄', nx, ny); ctx.textBaseline = 'alphabetic';
+        ctx.font = '12px monospace'; ctx.fillStyle = node.role === 'center' ? colorText : colorTextMuted;
         ctx.fillText(node.label, nx, ny + r + 18);
-        ctx.font = '10px monospace'; ctx.fillStyle = '#4b5563'; ctx.fillText(`${node.lines} lines`, nx, ny + r + 32);
-        if (node.role === 'importedBy') { ctx.font = '9px monospace'; ctx.fillStyle = '#7c3aed'; ctx.fillText('imports ↓', nx, ny - r - 8); }
-        if (node.role === 'import') { ctx.font = '9px monospace'; ctx.fillStyle = '#06b6d4'; ctx.fillText('imported by ↑', nx, ny - r - 8); }
+        ctx.font = '10px monospace'; ctx.fillStyle = colorTextFaint; ctx.fillText(`${node.lines} lines`, nx, ny + r + 32);
+        if (node.role === 'importedBy') { ctx.font = '9px monospace'; ctx.fillStyle = colorPurple; ctx.fillText('imports ↓', nx, ny - r - 8); }
+        if (node.role === 'import') { ctx.font = '9px monospace'; ctx.fillStyle = colorCyan; ctx.fillText('imported by ↑', nx, ny - r - 8); }
       });
 
       animationId = requestAnimationFrame(draw);

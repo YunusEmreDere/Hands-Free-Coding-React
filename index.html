@@ -7,6 +7,20 @@
     <title>VoiceCode AI - Dashboard</title>
   </head>
   <body>
+    <script>
+      try {
+        var s = JSON.parse(localStorage.getItem('voicecode-settings') || '{}');
+        var st = s.state || {};
+        var t = st.theme || 'dark';
+        if (t === 'system') {
+          document.documentElement.setAttribute('data-theme',
+            window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        } else {
+          document.documentElement.setAttribute('data-theme', t);
+        }
+        if (st.fontSize) document.documentElement.style.fontSize = st.fontSize + 'px';
+      } catch(e) {}
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -16,6 +16,7 @@ export interface ChatStore {
 
   // Actions
   addMessage: (message: Message) => void;
+  updateLastMessage: (content: string) => void;
   createNewChat: () => void;
   switchChat: (chatId: number) => void;
   clearSession: () => void;

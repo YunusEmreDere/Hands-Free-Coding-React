@@ -13,18 +13,14 @@ export default function Header({ sidebarCollapsed }: HeaderProps) {
     }`}>
       {/* Logo Section */}
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 bg-gradient-purple-cyan rounded-lg flex items-center justify-center">
-          <span className="text-lg">🛡️</span>
-        </div>
         <span className="text-lg font-semibold">VoiceCode AI</span>
       </div>
 
       {/* Explorer Button */}
       <button
         onClick={() => navigate('/explorer')}
-        className="flex items-center gap-2 px-4 py-2 bg-[#15151e] border border-purple-primary/30 rounded-lg text-sm text-gray-300 hover:border-purple-primary/60 hover:text-white transition-all"
+        className="flex items-center gap-2 px-4 py-2 bg-theme-surface border border-purple-primary/30 rounded-lg text-sm text-theme-text-secondary hover:border-purple-primary/60 hover:text-theme-text transition-all"
       >
-        <span className="text-[#7c3aed]">📊</span>
         Project Explorer
       </button>
     </header>

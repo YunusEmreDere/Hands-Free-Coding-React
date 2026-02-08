@@ -29,7 +29,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d0d14] text-white flex flex-col">
+    <div className="min-h-screen bg-theme-bg-alt text-theme-text flex flex-col">
       {/* Header */}
       <header className="px-8 py-4">
         <div className="flex items-center gap-2">
@@ -51,7 +51,7 @@ export default function LoginPage() {
                   key={i}
                   className="w-2 rounded-[10px]"
                   style={{
-                    background: 'linear-gradient(to top, #7c3aed, #4c1d95)',
+                    background: 'linear-gradient(to top, var(--color-accent-purple), var(--color-accent-purple-deep))',
                     animation: 'loginWave 1s ease-in-out infinite',
                     animationDelay: `${delay}s`,
                   }}
@@ -67,7 +67,7 @@ export default function LoginPage() {
               <h1
                 className="text-5xl font-extrabold tracking-tight leading-tight"
                 style={{
-                  color: '#7c3aed',
+                  color: 'var(--color-accent-purple)',
                   textShadow: '0 0 20px rgba(124, 58, 237, 0.5)',
                 }}
               >
@@ -84,16 +84,16 @@ export default function LoginPage() {
 
           {/* Right Column - Login Form */}
           <div className="flex justify-center">
-            <div className="w-full max-w-md bg-[#15151e] p-10 rounded-[20px] border border-[#2d2d3d] shadow-[0_10px_40px_rgba(0,0,0,0.5)]">
+            <div className="w-full max-w-md bg-theme-surface p-10 rounded-[20px] border border-theme-border-alt shadow-[0_10px_40px_rgba(0,0,0,0.5)]">
               <h3 className="text-xl font-semibold mb-6">Oturum Başlat</h3>
 
               {/* Tabs */}
-              <div className="flex border-b border-[#2d2d3d] mb-6">
+              <div className="flex border-b border-theme-border-alt mb-6">
                 <button
                   onClick={() => setActiveTab('login')}
                   className={`flex-1 pb-3 text-sm font-medium transition-colors ${
                     activeTab === 'login'
-                      ? 'text-[#7c3aed] border-b-2 border-[#7c3aed]'
+                      ? 'text-purple-primary border-b-2 border-purple-primary'
                       : 'text-gray-500 hover:text-gray-300'
                   }`}
                 >
@@ -103,7 +103,7 @@ export default function LoginPage() {
                   onClick={() => setActiveTab('register')}
                   className={`flex-1 pb-3 text-sm font-medium transition-colors ${
                     activeTab === 'register'
-                      ? 'text-[#7c3aed] border-b-2 border-[#7c3aed]'
+                      ? 'text-purple-primary border-b-2 border-purple-primary'
                       : 'text-gray-500 hover:text-gray-300'
                   }`}
                 >
@@ -121,7 +121,7 @@ export default function LoginPage() {
                       value={loginId}
                       onChange={(e) => setLoginId(e.target.value)}
                       placeholder="user@voicecode.ai"
-                      className="w-full bg-[#0d0d14] border border-[#2d2d3d] rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#7c3aed]/60 transition-colors"
+                      className="w-full bg-theme-bg-alt border border-theme-border-alt rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-purple-primary/60 transition-colors"
                     />
                   </div>
                   <div>
@@ -131,7 +131,7 @@ export default function LoginPage() {
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
                       placeholder="••••••"
-                      className="w-full bg-[#0d0d14] border border-[#2d2d3d] rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#7c3aed]/60 transition-colors"
+                      className="w-full bg-theme-bg-alt border border-theme-border-alt rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-purple-primary/60 transition-colors"
                     />
                   </div>
 
@@ -146,14 +146,14 @@ export default function LoginPage() {
                       type="submit"
                       className="py-3 rounded-lg font-medium text-white transition-all hover:shadow-[0_0_20px_rgba(124,58,237,0.6)] hover:scale-[1.02]"
                       style={{
-                        background: 'linear-gradient(90deg, #7c3aed, #6d28d9)',
+                        background: 'linear-gradient(90deg, var(--color-accent-purple), var(--color-accent-purple-dark))',
                       }}
                     >
                       Giriş Yap
                     </button>
                     <button
                       type="button"
-                      className="py-3 rounded-lg font-medium text-white bg-[#1a1a2e] border border-[#2d2d3d] hover:border-[#7c3aed]/40 transition-all"
+                      className="py-3 rounded-lg font-medium text-white bg-theme-border border border-theme-border-alt hover:border-purple-primary/40 transition-all"
                     >
                       🎤 Voice ID
                     </button>
@@ -170,7 +170,7 @@ export default function LoginPage() {
                       type="text"
                       value={regUsername}
                       onChange={(e) => setRegUsername(e.target.value)}
-                      className="w-full bg-[#0d0d14] border border-[#2d2d3d] rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#7c3aed]/60 transition-colors"
+                      className="w-full bg-theme-bg-alt border border-theme-border-alt rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-purple-primary/60 transition-colors"
                     />
                   </div>
                   <div>
@@ -179,7 +179,7 @@ export default function LoginPage() {
                       type="email"
                       value={regEmail}
                       onChange={(e) => setRegEmail(e.target.value)}
-                      className="w-full bg-[#0d0d14] border border-[#2d2d3d] rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#7c3aed]/60 transition-colors"
+                      className="w-full bg-theme-bg-alt border border-theme-border-alt rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-purple-primary/60 transition-colors"
                     />
                   </div>
                   <div>
@@ -188,7 +188,7 @@ export default function LoginPage() {
                       type="password"
                       value={regPassword}
                       onChange={(e) => setRegPassword(e.target.value)}
-                      className="w-full bg-[#0d0d14] border border-[#2d2d3d] rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#7c3aed]/60 transition-colors"
+                      className="w-full bg-theme-bg-alt border border-theme-border-alt rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-purple-primary/60 transition-colors"
                     />
                   </div>
 
@@ -197,7 +197,7 @@ export default function LoginPage() {
                       type="submit"
                       className="w-full py-3 rounded-lg font-medium text-white transition-all hover:shadow-[0_0_20px_rgba(124,58,237,0.6)] hover:scale-[1.02]"
                       style={{
-                        background: 'linear-gradient(90deg, #7c3aed, #6d28d9)',
+                        background: 'linear-gradient(90deg, var(--color-accent-purple), var(--color-accent-purple-dark))',
                       }}
                     >
                       Hesap Oluştur
