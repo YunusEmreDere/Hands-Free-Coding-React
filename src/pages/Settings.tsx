@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -12,6 +13,7 @@ import { useTranslation } from '../i18n/useTranslation';
 type SettingsTab = 'models' | 'language' | 'fontSize' | 'theme' | 'account';
 
 export default function Settings() {
+  const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<SettingsTab>('models');
   const { t } = useTranslation();
@@ -32,7 +34,16 @@ export default function Settings() {
         <Header sidebarCollapsed={sidebarCollapsed} />
 
         <main className="pt-20 pb-16 px-8">
-          <h1 className="text-2xl font-bold text-theme-text mb-8">{t('settings.title')}</h1>
+          <div className="flex items-center gap-4 mb-8">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="w-9 h-9 flex items-center justify-center rounded-lg bg-theme-surface border border-theme-border text-theme-text-muted hover:text-theme-text hover:border-purple-primary/40 transition-all"
+              title={t('settings.title')}
+            >
+              ←
+            </button>
+            <h1 className="text-2xl font-bold text-theme-text">{t('settings.title')}</h1>
+          </div>
 
           <div className="flex gap-8">
             {/* Left: Tab navigation */}

@@ -4,6 +4,7 @@ import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import ProjectExplorer from './pages/ProjectExplorer';
 import Settings from './pages/Settings';
+import UnifiedIDE from './pages/UnifiedIDE';
 import useSettingsStore from './store/settingsStore';
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/explorer" element={<ProjectExplorer />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/ide" element={<UnifiedIDE />} />
       </Routes>
     </BrowserRouter>
   );

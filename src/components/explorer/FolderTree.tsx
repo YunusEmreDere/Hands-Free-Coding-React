@@ -28,7 +28,7 @@ export default function FolderTree({ node, depth, selectedFile, onSelect }: Fold
           <span className="w-4" />
         )}
         <span>{isFolder ? '📁' : '📄'}</span>
-        <span className={`truncate ${isSelected ? 'font-semibold' : ''}`}>{node.name}</span>
+        <span className={`break-all leading-snug ${isSelected ? 'font-semibold' : ''}`}>{node.name}</span>
         {!isFolder && node.lines != null && (
           <span className="ml-auto text-[10px] text-theme-text-faint flex-shrink-0">{node.lines}L</span>
         )}

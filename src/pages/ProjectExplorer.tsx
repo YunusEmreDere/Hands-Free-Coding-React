@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileEntry, flattenFiles, getImportedByFromList, countFolders } from '../types/explorer';
-import { parseImports, resolveAllImports, readDirectoryRecursive, buildTreeFromFileList } from '../utils/fileParser';
 import { DEMO_PROJECT } from '../data/demoProject';
 import FolderTree from '../components/explorer/FolderTree';
 import SingleFileGraph from '../components/explorer/SingleFileGraph';
 import GlobalGraph from '../components/explorer/GlobalGraph';
+import FolderSelectModal from '../components/explorer/FolderSelectModal';
 
+const API_BASE = 'http://127.0.0.1:8000';
 const AUTO_REFRESH_INTERVAL = 30_000; // 30 saniye
 
 export default function ProjectExplorer() {
@@ -15,11 +16,11 @@ export default function ProjectExplorer() {
   const [allFiles, setAllFiles] = useState<FileEntry[]>(() => flattenFiles(DEMO_PROJECT));
   const [selectedFile, setSelectedFile] = useState<FileEntry | null>(null);
   const [viewMode, setViewMode] = useState<'file' | 'global'>('file');
-  const [loading, setLoading] = useState(false);
   const [projectName, setProjectName] = useState('Demo Project');
+  const [showModal, setShowModal] = useState(true);
 
-  // Directory handle for refresh
-  const dirHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
+  // Backend project path for refresh
+  const projectPathRef = useRef<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -28,28 +29,40 @@ export default function ProjectExplorer() {
     setAllFiles(flattenFiles(project));
   }, [project]);
 
-  // Refresh function - re-reads the stored dirHandle
+  // Modal callback - backend returns ready tree
+  const handleProjectLoad = useCallback((tree: FileEntry, name: string, path: string) => {
+    projectPathRef.current = path;
+    setProject(tree);
+    setProjectName(name);
+    setSelectedFile(null);
+    setLastRefreshed(new Date());
+    setShowModal(false);
+  }, []);
+
+  // Refresh function - re-reads from backend using stored path
   const refreshProject = useCallback(async (silent = false) => {
-    const handle = dirHandleRef.current;
-    if (!handle) return;
+    const path = projectPathRef.current;
+    if (!path) return;
 
     if (!silent) setRefreshing(true);
 
     try {
-      const tree = await readDirectoryRecursive(handle, handle.name);
-      const resolved = resolveAllImports(tree);
-      setProject(resolved);
+      const res = await fetch(`${API_BASE}/read-folder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+      if (!res.ok) throw new Error('Refresh failed');
+
+      const tree: FileEntry = await res.json();
+      setProject(tree);
       setLastRefreshed(new Date());
 
       // Keep selected file if it still exists
       if (selectedFile) {
-        const newFiles = flattenFiles(resolved);
+        const newFiles = flattenFiles(tree);
         const stillExists = newFiles.find(f => f.path === selectedFile.path);
-        if (stillExists) {
-          setSelectedFile(stillExists);
-        } else {
-          setSelectedFile(null);
-        }
+        setSelectedFile(stillExists || null);
       }
     } catch (err: any) {
       console.error('Refresh error:', err);
@@ -60,7 +73,7 @@ export default function ProjectExplorer() {
 
   // Auto-refresh interval
   useEffect(() => {
-    if (!autoRefresh || !dirHandleRef.current) return;
+    if (!autoRefresh || !projectPathRef.current) return;
 
     const interval = setInterval(() => {
       refreshProject(true);
@@ -69,62 +82,7 @@ export default function ProjectExplorer() {
     return () => clearInterval(interval);
   }, [autoRefresh, refreshProject]);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const handleOpenFolder = async () => {
-    setErrorMsg(null);
-
-    if ('showDirectoryPicker' in window) {
-      try {
-        const dirHandle = await (window as any).showDirectoryPicker();
-        dirHandleRef.current = dirHandle;
-        setLoading(true);
-        setSelectedFile(null);
-
-        const tree = await readDirectoryRecursive(dirHandle, dirHandle.name);
-        const resolved = resolveAllImports(tree);
-
-        setProject(resolved);
-        setProjectName(dirHandle.name);
-        setLastRefreshed(new Date());
-        setLoading(false);
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          console.error('Folder read error:', err);
-          setErrorMsg('Klasör okunamadı: ' + err.message);
-        }
-        setLoading(false);
-      }
-    } else {
-      fileInputRef.current?.click();
-    }
-  };
-
-  const handleFallbackFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    setLoading(true);
-    setSelectedFile(null);
-    setErrorMsg(null);
-    dirHandleRef.current = null;
-
-    try {
-      const root = await buildTreeFromFileList(files, parseImports);
-      const resolved = resolveAllImports(root);
-      setProject(resolved);
-      setProjectName(root.name);
-    } catch (err: any) {
-      console.error('File read error:', err);
-      setErrorMsg('Dosyalar okunamadı: ' + err.message);
-    }
-
-    setLoading(false);
-    e.target.value = '';
-  };
-
-  const hasLiveHandle = dirHandleRef.current !== null;
+  const hasProject = projectPathRef.current !== null;
 
   const breadcrumb = selectedFile ? selectedFile.path.split('/') : [projectName];
   const importedBy = selectedFile ? getImportedByFromList(selectedFile.path, allFiles) : [];
@@ -153,35 +111,14 @@ export default function ProjectExplorer() {
         {/* Open Folder Button */}
         <div className="px-3 py-3 border-b border-theme-border">
           <button
-            onClick={handleOpenFolder}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-gradient-to-r from-purple-primary/30 to-cyan-primary/30 border border-purple-primary/50 rounded-lg text-sm font-medium hover:from-purple-primary/40 hover:to-cyan-primary/40 transition-all disabled:opacity-50"
+            onClick={() => setShowModal(true)}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-gradient-to-r from-purple-primary/30 to-cyan-primary/30 border border-purple-primary/50 rounded-lg text-sm font-medium hover:from-purple-primary/40 hover:to-cyan-primary/40 transition-all"
           >
-            {loading ? (
-              <>
-                <span className="animate-spin">⏳</span>
-                Okunuyor...
-              </>
-            ) : (
-              <>
-                📂 Klasör Aç
-              </>
-            )}
+            📂 Proje Bagla
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            {...{ webkitdirectory: '', directory: '' } as any}
-            multiple
-            onChange={handleFallbackFiles}
-          />
-          {errorMsg && (
-            <p className="text-xs text-red-400 mt-2">{errorMsg}</p>
-          )}
 
-          {/* Refresh controls - only when a live folder handle exists */}
-          {hasLiveHandle && (
+          {/* Refresh controls - only when a project is loaded from backend */}
+          {hasProject && (
             <div className="mt-2 space-y-2">
               <button
                 onClick={() => refreshProject(false)}
@@ -393,7 +330,7 @@ export default function ProjectExplorer() {
               <div className="text-4xl mb-4">📂</div>
               <p className="text-sm text-theme-text-muted mb-4">Soldaki dosya ağacından<br />bir dosya seçin</p>
               <p className="text-xs text-theme-text-faint">veya</p>
-              <button onClick={handleOpenFolder} className="mt-2 text-sm text-purple-primary hover:underline">
+              <button onClick={() => setShowModal(true)} className="mt-2 text-sm text-purple-primary hover:underline">
                 Kendi projenizi açın
               </button>
             </div>
@@ -410,6 +347,13 @@ export default function ProjectExplorer() {
           </div>
         </div>
       </div>
+
+      {/* Folder Select Modal */}
+      <FolderSelectModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        onProjectLoad={handleProjectLoad}
+      />
     </div>
   );
 }

@@ -19,14 +19,14 @@ export default function Dashboard() {
         <Header sidebarCollapsed={sidebarCollapsed} />
 
         {/* Content - fills between header (h-16) and footer (h-12) */}
-        <main className="pt-16 pb-12 px-8 grid grid-cols-2 gap-8 h-screen">
+        <main className="pt-16 pb-12 px-8 grid grid-cols-2 gap-8 h-screen overflow-hidden">
           {/* Left Half - Visualizer (vertically centered) */}
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center min-h-0">
             <Visualizer />
           </div>
 
           {/* Right Half - Chat Interface (stretches full height, bottom touches footer) */}
-          <div className="flex flex-col py-4">
+          <div className="flex flex-col py-4 min-h-0">
             <ChatInterface />
           </div>
         </main>

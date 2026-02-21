@@ -1,15 +1,143 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import useChatStore from '../store/chatStore';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { diffLines } from 'diff';
 
-export default function ChatInterface() {
+const API_BASE = 'http://127.0.0.1:8000';
+
+// ─── Inline diff + apply panel (shown below each code block) ───────────────
+function InlineCodeAction({ newCode, filename }: { newCode: string; filename: string }) {
+  const [oldCode, setOldCode] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  useEffect(() => {
+    fetch(`${API_BASE}/read-file-content`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: filename }),
+    })
+      .then(r => r.ok ? r.json() : { content: '' })
+      .then(data => setOldCode(data.content ?? ''))
+      .catch(() => setOldCode(''));
+  }, [filename]);
+
+  const diffLinesList = useMemo(() => {
+    if (oldCode === null) return [];
+    const parts = diffLines(oldCode, newCode);
+    const result: { type: 'added' | 'removed' | 'unchanged'; content: string }[] = [];
+    for (const part of parts) {
+      const lines = part.value.split('\n');
+      if (lines[lines.length - 1] === '') lines.pop();
+      for (const line of lines) {
+        result.push({
+          type: part.added ? 'added' : part.removed ? 'removed' : 'unchanged',
+          content: line,
+        });
+      }
+    }
+    return result;
+  }, [oldCode, newCode]);
+
+  const added   = diffLinesList.filter(l => l.type === 'added').length;
+  const removed = diffLinesList.filter(l => l.type === 'removed').length;
+
+  const handleApply = async () => {
+    setSaving(true);
+    setSaveError('');
+    try {
+      const res = await fetch(`${API_BASE}/save-file`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename, content: newCode }),
+      });
+      if (!res.ok) throw new Error();
+      setSaved(true);
+    } catch {
+      setSaveError('Kaydetme başarısız');
+      setTimeout(() => setSaveError(''), 3000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-[#0d0d1a]">
+      {/* Action bar */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700/30">
+        <div className="flex items-center gap-3 text-xs font-mono">
+          {oldCode === null ? (
+            <span className="text-gray-500 animate-pulse">Yükleniyor...</span>
+          ) : (
+            <>
+              <span className="text-gray-600 truncate max-w-[200px]">{filename}</span>
+              {added   > 0 && <span className="text-green-400 font-bold">+{added}</span>}
+              {removed > 0 && <span className="text-red-400   font-bold">-{removed}</span>}
+              {added === 0 && removed === 0 && (
+                <span className="text-gray-500 italic">değişiklik yok</span>
+              )}
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {saveError && <span className="text-red-400 text-xs">{saveError}</span>}
+          {saved ? (
+            <span className="text-green-400 text-xs font-semibold">✓ Kaydedildi</span>
+          ) : (
+            <button
+              onClick={handleApply}
+              disabled={saving || oldCode === null}
+              className="px-3 py-1 bg-green-700/70 hover:bg-green-600 text-white text-xs rounded-md font-semibold transition-all disabled:opacity-40 flex items-center gap-1.5"
+            >
+              {saving
+                ? <><span className="animate-spin inline-block">⏳</span> Kaydediliyor</>
+                : <>✓ Uygula</>}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Changed lines only */}
+      {oldCode !== null && (added > 0 || removed > 0) && (
+        <div className="flex-1 overflow-y-auto">
+          {diffLinesList.map((line, i) => {
+            if (line.type === 'unchanged') return null;
+            return (
+              <div
+                key={i}
+                className={`flex items-start px-4 py-px text-[11px] font-mono leading-5 ${
+                  line.type === 'added'
+                    ? 'bg-green-500/10 text-green-300 border-l-2 border-green-500'
+                    : 'bg-red-500/10   text-red-400   border-l-2 border-red-500'
+                }`}
+              >
+                <span className="mr-2 flex-shrink-0 select-none opacity-60">
+                  {line.type === 'added' ? '+' : '-'}
+                </span>
+                <span className="break-all">{line.content || ' '}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface ChatInterfaceProps{
+  selectedFile?: any | null;
+}
+
+export default function ChatInterface({ selectedFile }: ChatInterfaceProps = {}) {
   const { messages, addMessage, updateLastMessage } = useChatStore();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+
 
   // Auto-scroll to bottom when new message arrives
   useEffect(() => {
@@ -62,17 +190,43 @@ export default function ChatInterface() {
     addMessage({ role: 'assistant', content: '' });
 
     try {
+
+      let currentFileContent = "";
+      const currentFileName = selectedFile?.path || "";
+      console.log("Seçili Dosya Adı:", currentFileName);
+
+      if(currentFileName){
+        try{
+          const res = await fetch(`${API_BASE}/read-file-content`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({path: currentFileName})
+          });
+
+          if(res.ok){
+            const data = await res.json();
+            currentFileContent = data.content;
+          }
+        }catch (err){
+          console.error("Dosya içeriği okunamadı:", err);
+        }
+      }
+
       const ws = new WebSocket('ws://127.0.0.1:8000/ws');
       wsRef.current = ws;
 
       ws.onopen = () => {
-        ws.send(JSON.stringify({
+        // 3. KONTROL: WebSocket'e giden paket
+        const payload = {
           message: userMessage,
-          model: "qwen2.5-coder:7b"
-        }));
+          model: "qwen2.5-coder:7b",
+          fileName: currentFileName,
+          fileContent: currentFileContent
+        };
+        console.log("WebSocket'e Gönderilen Paket:", payload);
+        
+        ws.send(JSON.stringify(payload));
         resetTimeout();
-
-        // Buffer'ı her 50ms'de flush et (re-render sayısını azaltır)
         flushTimerRef.current = setInterval(flushBuffer, 50);
       };
 
@@ -104,48 +258,7 @@ export default function ChatInterface() {
     }
   };
 
-  // --- 1. KAYDET BUTONU BİLEŞENİ ---
-  const SaveButton = ({ text, filename }: { text: string, filename: string }) => {
-    const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-
-    const handleSave = async () => {
-      setStatus('saving');
-      try {
-        const response = await fetch('http://127.0.0.1:8000/save-file', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: filename || `script_${Date.now()}.py`,
-            content: text
-          })
-        });
-
-        if (!response.ok) throw new Error('Sunucu hatası');
-        
-        setStatus('saved');
-        setTimeout(() => setStatus('idle'), 2000);
-      } catch (error) {
-        console.error(error);
-        setStatus('error');
-        setTimeout(() => setStatus('idle'), 2000);
-      }
-    };
-
-    return (
-      <button
-        onClick={handleSave}
-        className={`px-2 py-1 rounded text-xs font-medium transition-all duration-200 border flex items-center gap-1 ${
-          status === 'saved' ? 'bg-green-500/20 text-green-400 border-green-500/50' : 
-          status === 'error' ? 'bg-red-500/20 text-red-400 border-red-500/50' :
-          'bg-blue-600/20 text-blue-400 border-blue-500/30 hover:bg-blue-600/30'
-        }`}
-      >
-        {status === 'saving' ? '⏳' : status === 'saved' ? '✅' : '💾'} {filename || 'Kaydet'}
-      </button>
-    );
-  };
-
-  // --- 2. KOPYALA BUTONU BİLEŞENİ ---
+  // --- KOPYALA BUTONU BİLEŞENİ ---
   const CopyButton = ({ text }: { text: string }) => {
     const [isCopied, setIsCopied] = useState(false);
 
@@ -200,9 +313,9 @@ export default function ChatInterface() {
             </div>
 
             {/* Mesaj İçeriği + MARKDOWN RENDERER */}
-            <div className={`max-w-[85%] px-4 py-3 rounded-2xl shadow-md overflow-hidden ${
-                message.role === 'user' 
-                  ? 'bg-purple-900/40 border border-purple-500/30 text-white rounded-tr-sm text-right' 
+            <div className={`max-w-[95%] w-full px-4 py-3 rounded-2xl shadow-md overflow-hidden ${
+                message.role === 'user'
+                  ? 'bg-purple-900/40 border border-purple-500/30 text-white rounded-tr-sm text-right'
                   : 'bg-theme-border/90 border border-gray-700/50 text-gray-200 rounded-tl-sm'
             }`}>
 
@@ -250,31 +363,40 @@ export default function ChatInterface() {
 
                           {/* Sağ Taraf: Butonlar */}
                           <div className="flex items-center gap-2">
-                            {/* Dosya adı olsa da olmasa da butonu gösteriyoruz */}
-                            <SaveButton text={codeText} filename={filename} />
                             <CopyButton text={codeText} />
                           </div>
                         </div>
 
-                        {/* KOD GÖSTERİM ALANI */}
-                        {/* @ts-ignore */}
-                        <SyntaxHighlighter
-                          {...rest}
-                          children={codeText}
-                          style={dracula}
-                          language={language} // "python:main.py" değil sadece "python" veriyoruz
-                          PreTag="div"
-                          customStyle={{
-                            margin: 0,
-                            padding: '1rem',      // Header olduğu için padding'i azalttık
-                            background: 'transparent', // Arkaplanı container'dan alsın
-                            fontSize: '0.9rem',
-                            lineHeight: '1.5'
-                          }}
-                          codeTagProps={{
-                            style: { fontFamily: 'JetBrains Mono, monospace' }
-                          }}
-                        />
+                        {/* KOD + DIFF YAN YANA */}
+                        <div className="flex items-stretch">
+                          {/* Sol: Kod */}
+                          <div className="flex-1 min-w-0">
+                            {/* @ts-ignore */}
+                            <SyntaxHighlighter
+                              {...rest}
+                              children={codeText}
+                              style={dracula}
+                              language={language}
+                              PreTag="div"
+                              customStyle={{
+                                margin: 0,
+                                padding: '1rem',
+                                background: 'transparent',
+                                fontSize: '0.9rem',
+                                lineHeight: '1.5'
+                              }}
+                              codeTagProps={{
+                                style: { fontFamily: 'JetBrains Mono, monospace' }
+                              }}
+                            />
+                          </div>
+                          {/* Sağ: Diff paneli (sadece dosya adı varsa) */}
+                          {filename && (
+                            <div className="w-[500px] xl:w-[600px] flex-shrink-0 border-l border-gray-700/40">
+                              <InlineCodeAction newCode={codeText} filename={filename} />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ) : (
                       // --- SATIR İÇİ KOD (`) ---
@@ -308,8 +430,20 @@ export default function ChatInterface() {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Seçili dosya bağlam pill'i */}
+      {selectedFile && (
+        <div className="flex items-center gap-2 px-3 py-1.5 mb-1 rounded-lg bg-purple-primary/8 border border-purple-primary/20 text-[11px] font-mono">
+          <span className="text-purple-primary/70">📎 Bağlam:</span>
+          <span className="text-purple-primary font-semibold truncate">{selectedFile.name}</span>
+          <span className="text-theme-text-faint truncate hidden sm:block">— {selectedFile.path}</span>
+          {selectedFile.lines && (
+            <span className="ml-auto text-theme-text-faint flex-shrink-0">{selectedFile.lines} satır</span>
+          )}
+        </div>
+      )}
+
       {/* Input Form */}
-      <form onSubmit={handleSubmit} className="pt-4 border-t border-purple-primary/20">
+      <form onSubmit={handleSubmit} className="pt-3 border-t border-purple-primary/20">
         <div className="flex gap-2">
           <input
             type="text"
@@ -327,6 +461,7 @@ export default function ChatInterface() {
           </button>
         </div>
       </form>
+
     </div>
   );
 }

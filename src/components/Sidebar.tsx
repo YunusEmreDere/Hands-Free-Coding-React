@@ -68,6 +68,13 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           {/* Bottom icons */}
           <div className="mt-auto space-y-2">
             <button
+              onClick={() => navigate('/ide')}
+              className="w-10 h-10 flex items-center justify-center rounded-lg bg-theme-border/60 border border-purple-primary/30 text-theme-text-muted hover:text-theme-text hover:border-purple-primary/60 transition-all"
+              title="Unified IDE"
+            >
+              🖥️
+            </button>
+            <button
               onClick={() => navigate('/settings')}
               className="w-10 h-10 flex items-center justify-center rounded-lg bg-theme-border/60 border border-theme-text-faint/40 text-theme-text-muted hover:text-theme-text transition-all"
               title="Ayarlar"
@@ -128,6 +135,12 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
           {/* Bottom Actions */}
           <div className="mt-auto pt-4 space-y-2 border-t border-purple-primary/10">
+            <button
+              onClick={() => navigate('/ide')}
+              className="w-full px-4 py-2 bg-theme-border/60 border border-purple-primary/30 text-theme-text-secondary rounded-lg hover:bg-purple-primary/10 hover:border-purple-primary/60 transition-all text-sm"
+            >
+              🖥️ Unified IDE
+            </button>
             <button
               onClick={() => navigate('/settings')}
               className="w-full px-4 py-2 bg-theme-border/60 border border-theme-text-faint/40 text-theme-text-secondary rounded-lg hover:bg-purple-primary/10 hover:border-purple-primary/60 transition-all text-sm"
