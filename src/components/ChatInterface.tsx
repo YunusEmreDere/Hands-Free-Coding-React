@@ -7,8 +7,16 @@ import { diffLines } from 'diff';
 
 const API_BASE = 'http://127.0.0.1:8000';
 
-// ─── Inline diff + apply panel (shown below each code block) ───────────────
-function InlineCodeAction({ newCode, filename }: { newCode: string; filename: string }) {
+// ─── Inline diff + apply panel ───────────────────────────────────────────────
+function InlineCodeAction({
+  newCode,
+  filename,
+  alreadyWritten,        // ← YENİ: Backend zaten yazdıysa true
+}: {
+  newCode: string;
+  filename: string;
+  alreadyWritten: boolean; // ← YENİ
+}) {
   const [oldCode, setOldCode] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -82,11 +90,19 @@ function InlineCodeAction({ newCode, filename }: { newCode: string; filename: st
             </>
           )}
         </div>
+
         <div className="flex items-center gap-2">
           {saveError && <span className="text-red-400 text-xs">{saveError}</span>}
-          {saved ? (
+
+          {/* ─── YENİ: Backend zaten yazdıysa "Uygulandı" rozeti göster ─── */}
+          {alreadyWritten ? (
+            <span className="px-3 py-1 bg-green-900/30 border border-green-500/30 text-green-400 text-xs rounded-md font-semibold">
+              ✓ Agent Uyguladı
+            </span>
+          ) : saved ? (
             <span className="text-green-400 text-xs font-semibold">✓ Kaydedildi</span>
           ) : (
+            /* Normal "Uygula" butonu — sadece backend yazmadıysa göster */
             <button
               onClick={handleApply}
               disabled={saving || oldCode === null}
@@ -127,27 +143,27 @@ function InlineCodeAction({ newCode, filename }: { newCode: string; filename: st
   );
 }
 
-interface ChatInterfaceProps{
+interface ChatInterfaceProps {
   selectedFile?: any | null;
 }
 
 export default function ChatInterface({ selectedFile }: ChatInterfaceProps = {}) {
   const { messages, addMessage, updateLastMessage } = useChatStore();
-  const [input, setInput] = useState('');
+  const [input, setInput]       = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
+  // ─── YENİ: Backend'in write_file ile yazdığı dosyaları tut ───────────────
+  const [writtenFiles, setWrittenFiles] = useState<Set<string>>(new Set());
 
-  // Auto-scroll to bottom when new message arrives
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Buffer for incoming WebSocket tokens to reduce re-renders
-  const bufferRef = useRef('');
+  const bufferRef     = useRef('');
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timeoutRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flushBuffer = () => {
     if (bufferRef.current) {
@@ -159,7 +175,6 @@ export default function ChatInterface({ selectedFile }: ChatInterfaceProps = {})
   const resetTimeout = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
-      // 30 saniye boyunca veri gelmezse bağlantıyı kes
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.close();
       }
@@ -185,30 +200,26 @@ export default function ChatInterface({ selectedFile }: ChatInterfaceProps = {})
     setInput('');
     setIsLoading(true);
 
-    // Add user message
     addMessage({ role: 'user', content: userMessage });
     addMessage({ role: 'assistant', content: '' });
 
     try {
+      let currentFileContent = '';
+      const currentFileName  = selectedFile?.path || '';
 
-      let currentFileContent = "";
-      const currentFileName = selectedFile?.path || "";
-      console.log("Seçili Dosya Adı:", currentFileName);
-
-      if(currentFileName){
-        try{
+      if (currentFileName) {
+        try {
           const res = await fetch(`${API_BASE}/read-file-content`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({path: currentFileName})
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: currentFileName }),
           });
-
-          if(res.ok){
+          if (res.ok) {
             const data = await res.json();
             currentFileContent = data.content;
           }
-        }catch (err){
-          console.error("Dosya içeriği okunamadı:", err);
+        } catch (err) {
+          console.error('Dosya içeriği okunamadı:', err);
         }
       }
 
@@ -216,28 +227,43 @@ export default function ChatInterface({ selectedFile }: ChatInterfaceProps = {})
       wsRef.current = ws;
 
       ws.onopen = () => {
-        // 3. KONTROL: WebSocket'e giden paket
         const payload = {
           message: userMessage,
-          model: "qwen2.5-coder:7b",
+          model: 'qwen2.5-coder:7b',
           fileName: currentFileName,
-          fileContent: currentFileContent
+          fileContent: currentFileContent,
         };
-        console.log("WebSocket'e Gönderilen Paket:", payload);
-        
         ws.send(JSON.stringify(payload));
         resetTimeout();
         flushTimerRef.current = setInterval(flushBuffer, 50);
       };
 
-      // Backend'den her harf geldiğinde buffer'a ekle
+      // ─── YENİ: Mesaj tipine göre yönlendir ───────────────────────────────
       ws.onmessage = (event) => {
-        bufferRef.current += event.data;
+        const text: string = event.data;
+
+        // 1. Backend write_file yaptıktan sonra sinyal gönderir
+        if (text.startsWith('FILE_WRITTEN:')) {
+          const writtenPath = text.replace('FILE_WRITTEN:', '').trim();
+          setWrittenFiles(prev => new Set(prev).add(writtenPath));
+          resetTimeout();
+          return;
+        }
+
+        // 2. Tool log satırları → ayrı "tool" mesajı olarak ekle
+        if (text.startsWith('⚙️') || text.startsWith('📋')) {
+          flushBuffer(); // önce biriken asistan metnini kaydet
+          addMessage({ role: 'tool', content: text });
+          resetTimeout();
+          return;
+        }
+
+        // 3. Normal asistan metni → buffer'a ekle
+        bufferRef.current += text;
         resetTimeout();
       };
 
       ws.onclose = () => {
-        // Kalan buffer'ı flush et
         flushBuffer();
         if (flushTimerRef.current) clearInterval(flushTimerRef.current);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -245,23 +271,22 @@ export default function ChatInterface({ selectedFile }: ChatInterfaceProps = {})
       };
 
       ws.onerror = (error) => {
-        console.error("WebSocket Hatası:", error);
+        console.error('WebSocket Hatası:', error);
         flushBuffer();
         if (flushTimerRef.current) clearInterval(flushTimerRef.current);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        updateLastMessage("\n\nBağlantı hatası oluştu. Backend açık mı?");
+        updateLastMessage('\n\nBağlantı hatası oluştu. Backend açık mı?');
         setIsLoading(false);
       };
     } catch (error) {
-      console.error("Hata:", error);
+      console.error('Hata:', error);
       setIsLoading(false);
     }
   };
 
-  // --- KOPYALA BUTONU BİLEŞENİ ---
+  // --- KOPYALA BUTONU ---
   const CopyButton = ({ text }: { text: string }) => {
     const [isCopied, setIsCopied] = useState(false);
-
     const handleCopy = async () => {
       if (!navigator.clipboard) return;
       try {
@@ -272,13 +297,12 @@ export default function ChatInterface({ selectedFile }: ChatInterfaceProps = {})
         console.error('Kopyalama başarısız:', err);
       }
     };
-
     return (
       <button
         onClick={handleCopy}
         className={`px-2 py-1 rounded text-xs font-medium transition-all duration-200 border ${
-          isCopied 
-            ? 'bg-green-500/20 text-green-400 border-green-500/50' 
+          isCopied
+            ? 'bg-green-500/20 text-green-400 border-green-500/50'
             : 'bg-gray-700/50 text-gray-400 border-gray-600 hover:bg-gray-600 hover:text-white'
         }`}
       >
@@ -294,143 +318,151 @@ export default function ChatInterface({ selectedFile }: ChatInterfaceProps = {})
     >
       {/* Messages Container */}
       <div className="flex-1 overflow-y-auto mb-4 space-y-3 pr-2 scrollbar-thin scrollbar-thumb-purple-primary/20">
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`flex items-start gap-3 ${
-              message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
-            }`}
-          >
-            {/* Avatar */}
+        {messages.map((message, index) => {
+
+          // ─── TOOL MESAJI ─────────────────────────────────────────────────
+          if (message.role === 'tool') {
+            return (
+              <div key={index} className="flex items-center gap-2 px-3 py-1.5 mx-4 rounded-lg
+                                          bg-blue-900/20 border border-blue-500/20
+                                          text-blue-300 text-xs font-mono">
+                {message.content}
+              </div>
+            );
+          }
+
+          // ─── KULLANICI & ASISTAN MESAJI ──────────────────────────────────
+          return (
             <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                message.role === 'user'
-                  ? 'bg-gradient-purple-cyan'
-                  : 'bg-theme-border border border-purple-primary/30'
+              key={index}
+              className={`flex items-start gap-3 ${
+                message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
               }`}
             >
-              {message.role === 'user' ? '👤' : '🤖'}
-            </div>
+              {/* Avatar */}
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                  message.role === 'user'
+                    ? 'bg-gradient-purple-cyan'
+                    : 'bg-theme-border border border-purple-primary/30'
+                }`}
+              >
+                {message.role === 'user' ? '👤' : '🤖'}
+              </div>
 
-            {/* Mesaj İçeriği + MARKDOWN RENDERER */}
-            <div className={`max-w-[95%] w-full px-4 py-3 rounded-2xl shadow-md overflow-hidden ${
+              {/* Mesaj Balonu */}
+              <div className={`max-w-[95%] w-full px-4 py-3 rounded-2xl shadow-md overflow-hidden ${
                 message.role === 'user'
                   ? 'bg-purple-900/40 border border-purple-500/30 text-white rounded-tr-sm text-right'
                   : 'bg-theme-border/90 border border-gray-700/50 text-gray-200 rounded-tl-sm'
-            }`}>
+              }`}>
+                <ReactMarkdown
+                  components={{
+                    code(props) {
+                      const { children, className, node, ...rest } = props;
+                      const match = /language-(\S+)/.exec(className || '');
+                      const codeText = String(children).replace(/\n$/, '');
 
-              <ReactMarkdown
-                components={{
-                  code(props) {
-                    const {children, className, node, ...rest} = props
-                    
-                    // 1. Regex ile "language-python:main.py" formatını yakala
-                    // \S+ boşluk olmayan her şeyi alır (nokta ve iki nokta dahil)
-                    const match = /language-(\S+)/.exec(className || '')
-                    
-                    // Kod içeriğini temizle (sondaki boşlukları at)
-                    const codeText = String(children).replace(/\n$/, '');
+                      const fullLangString = match ? match[1] : '';
+                      let language = fullLangString;
+                      let filename = '';
 
-                    // 2. Dil ve Dosya Adı Ayrıştırması
-                    const fullLangString = match ? match[1] : '';
-                    let language = fullLangString; // Varsayılan: python
-                    let filename = '';             // Varsayılan: boş
-                    
-                    // Eğer iki nokta varsa (python:main.py) parçala
-                    if (fullLangString.includes(':')) {
-                      const parts = fullLangString.split(':');
-                      language = parts[0]; // "python"
-                      filename = parts[1]; // "main.py"
-                    }
+                      if (fullLangString.includes(':')) {
+                        const parts = fullLangString.split(':');
+                        language = parts[0];
+                        filename = parts[1];
+                      }
 
-                    // 3. Kod Bloğu (Block) mu, Satır İçi (Inline) mi?
-                    return match ? (
-                      // --- BLOK KOD (```) ---
-                      <div className="relative group my-4 rounded-lg overflow-hidden border border-gray-700/50 shadow-lg bg-[#151520]">
-                        
-                        {/* ÜST BİLGİ ÇUBUĞU (HEADER) */}
-                        <div className="flex items-center justify-between px-4 py-2 bg-[#1a1a2e] border-b border-gray-700/30">
-                          
-                          {/* Sol Taraf: Dil ve Dosya Adı */}
-                          <div className="flex items-center gap-2 text-xs font-mono select-none">
-                            <span className="text-purple-400 font-bold uppercase">{language}</span>
-                            {filename ? (
-                               <span className="text-gray-400 opacity-70">/ {filename}</span>
-                            ) : (
-                               <span className="text-gray-600 italic">/ (İsimsiz)</span>
+                      return match ? (
+                        <div className="relative group my-4 rounded-lg overflow-hidden border border-gray-700/50 shadow-lg bg-[#151520]">
+
+                          {/* Header */}
+                          <div className="flex items-center justify-between px-4 py-2 bg-[#1a1a2e] border-b border-gray-700/30">
+                            <div className="flex items-center gap-2 text-xs font-mono select-none">
+                              <span className="text-purple-400 font-bold uppercase">{language}</span>
+                              {filename ? (
+                                <span className="text-gray-400 opacity-70">/ {filename}</span>
+                              ) : (
+                                <span className="text-gray-600 italic">/ (İsimsiz)</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <CopyButton text={codeText} />
+                            </div>
+                          </div>
+
+                          {/* Kod + Diff yan yana */}
+                          <div className="flex items-stretch">
+                            {/* Sol: Kod */}
+                            <div className="flex-1 min-w-0">
+                              {/* @ts-ignore */}
+                              <SyntaxHighlighter
+                                {...rest}
+                                children={codeText}
+                                style={dracula}
+                                language={language}
+                                PreTag="div"
+                                customStyle={{
+                                  margin: 0,
+                                  padding: '1rem',
+                                  background: 'transparent',
+                                  fontSize: '0.9rem',
+                                  lineHeight: '1.5',
+                                }}
+                                codeTagProps={{
+                                  style: { fontFamily: 'JetBrains Mono, monospace' },
+                                }}
+                              />
+                            </div>
+
+                            {/* Sağ: Diff paneli (sadece dosya adı varsa) */}
+                            {filename && (
+                              <div className="w-[500px] xl:w-[600px] flex-shrink-0 border-l border-gray-700/40">
+                                {/* ─── YENİ: writtenFiles'a bak, alreadyWritten prop geç ─── */}
+                                <InlineCodeAction
+                                  newCode={codeText}
+                                  filename={filename}
+                                  alreadyWritten={writtenFiles.has(filename)}
+                                />
+                              </div>
                             )}
                           </div>
-
-                          {/* Sağ Taraf: Butonlar */}
-                          <div className="flex items-center gap-2">
-                            <CopyButton text={codeText} />
-                          </div>
                         </div>
-
-                        {/* KOD + DIFF YAN YANA */}
-                        <div className="flex items-stretch">
-                          {/* Sol: Kod */}
-                          <div className="flex-1 min-w-0">
-                            {/* @ts-ignore */}
-                            <SyntaxHighlighter
-                              {...rest}
-                              children={codeText}
-                              style={dracula}
-                              language={language}
-                              PreTag="div"
-                              customStyle={{
-                                margin: 0,
-                                padding: '1rem',
-                                background: 'transparent',
-                                fontSize: '0.9rem',
-                                lineHeight: '1.5'
-                              }}
-                              codeTagProps={{
-                                style: { fontFamily: 'JetBrains Mono, monospace' }
-                              }}
-                            />
-                          </div>
-                          {/* Sağ: Diff paneli (sadece dosya adı varsa) */}
-                          {filename && (
-                            <div className="w-[500px] xl:w-[600px] flex-shrink-0 border-l border-gray-700/40">
-                              <InlineCodeAction newCode={codeText} filename={filename} />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      // --- SATIR İÇİ KOD (`) ---
-                      <code {...rest} className="bg-gray-700/50 px-1.5 py-0.5 rounded text-purple-300 font-mono text-sm border border-gray-600/30">
-                        {children}
-                      </code>
-                    )
-                  }
-                }}
-              >
-                {message.content}
-              </ReactMarkdown>
-
+                      ) : (
+                        <code {...rest} className="bg-gray-700/50 px-1.5 py-0.5 rounded text-purple-300 font-mono text-sm border border-gray-600/30">
+                          {children}
+                        </code>
+                      );
+                    },
+                  }}
+                >
+                  {message.content}
+                </ReactMarkdown>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
-        {/* Yükleniyor Animasyonu */}
+        {/* Yükleniyor */}
         {isLoading && (
-            <div className="flex items-center gap-2 text-purple-400 text-sm ml-4 mt-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce delay-75"></div>
-                <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce delay-150"></div>
-                Thinking...
-                <button onClick={handleCancel} className="ml-2 px-2 py-0.5 rounded border border-red-500/50 text-xs text-red-400 hover:bg-red-500/10 transition-colors">
-                  Durdur
-                </button>
-            </div>
+          <div className="flex items-center gap-2 text-purple-400 text-sm ml-4 mt-2">
+            <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"></div>
+            <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce delay-75"></div>
+            <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce delay-150"></div>
+            Thinking...
+            <button
+              onClick={handleCancel}
+              className="ml-2 px-2 py-0.5 rounded border border-red-500/50 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              Durdur
+            </button>
+          </div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Seçili dosya bağlam pill'i */}
+      {/* Seçili dosya pill */}
       {selectedFile && (
         <div className="flex items-center gap-2 px-3 py-1.5 mb-1 rounded-lg bg-purple-primary/8 border border-purple-primary/20 text-[11px] font-mono">
           <span className="text-purple-primary/70">📎 Bağlam:</span>
@@ -442,7 +474,7 @@ export default function ChatInterface({ selectedFile }: ChatInterfaceProps = {})
         </div>
       )}
 
-      {/* Input Form */}
+      {/* Input */}
       <form onSubmit={handleSubmit} className="pt-3 border-t border-purple-primary/20">
         <div className="flex gap-2">
           <input
@@ -461,7 +493,6 @@ export default function ChatInterface({ selectedFile }: ChatInterfaceProps = {})
           </button>
         </div>
       </form>
-
     </div>
   );
 }
